@@ -18,13 +18,7 @@ enum OPCODE
     MOV_MEM_REG,
 };
 
-// constexpr as this should not alter
-constexpr opCodeDecoderFunction opCodeFuncLookup[]
-{
-    &decodeRegToReg,
-    &decodeImmToReg,
-    &decodeMemToReg,
-};
+
 
 std::unordered_map<u8, vector<std::string>> registerMap = {
         {0b000, {"al", "ax"}},
@@ -48,7 +42,7 @@ size_t decodeRegToReg(const vector<u8> &buffer, size_t idx)
     u8 secondByte = buffer[idx+1];
 
     u8 w = firstByte & 0b00000001;
-    u8 d = firstByte & 0b00000010;
+    u8 d = (firstByte & 0b00000010) >> 1;
     
     u8 reg = (secondByte & 0b00111000) >> 3;
     u8 rm = secondByte & 0b00000111;
@@ -76,14 +70,102 @@ size_t decodeRegToReg(const vector<u8> &buffer, size_t idx)
 
 size_t decodeImmToReg(const vector<u8> &buffer, size_t idx)
 {
-    return 0;
+    size_t bytesProcessed{1};
+    u8 firstByte = buffer[idx];
+    u8 w = firstByte & 0b00001000;
+    u8 reg = firstByte & 0b00000111;
+    
+    int16_t data = buffer[idx+1];
+    bytesProcessed++;
+
+    //...
+    if (w == 1)
+    {
+        bytesProcessed++;
+        data = (buffer[idx+2] << 8) | data;
+    }
+
+    assert(registerMap.find(reg) != registerMap.end());
+
+    std::cout << "mov " << registerMap[reg][w] << ", " << data << '\n';
+    return bytesProcessed;
+
+}
+
+// Probably don't want to be passing this buffer around - pointers?
+int16_t getDisplacement(u8 mod, const vector<u8> &buffer, bool isDirectlyAddressable, size_t &bytesProcessed, size_t dataIdx)
+{
+    int16_t displacement{};
+    if (mod == 0b01) // 8-bit
+    {
+        displacement = buffer[dataIdx];
+        bytesProcessed++;
+    }
+    else if (mod == 0b10 || isDirectlyAddressable) // 16-bit
+    {
+        displacement = (buffer[dataIdx+1] << 8) | buffer[dataIdx];
+        bytesProcessed += 2;
+    }
+
+    return displacement;
 }
 
 size_t decodeMemToReg(const vector<u8> &buffer, size_t idx)
 {
-    return 0;
+    size_t bytesProcessed{0};
+    u8 firstByte = buffer[idx];
+    u8 secondByte = buffer[idx+1];
+    bytesProcessed += 2;
+
+    u8 w = firstByte & 0b00000001;
+    u8 d = (firstByte & 0b00000010) >> 1;
+
+    u8 mod = (secondByte & 0b11000000) >> 6;
+    u8 reg = (secondByte & 0b00111000) >> 3;
+    u8 rm = secondByte & 0b00000111;
+
+    std::string src{};
+    std::string dst{};
+
+    assert(registerMap.find(reg) != registerMap.end());
+    assert(registerMap.find(rm) != registerMap.end());
+
+    if (d == 0) // REG is not destination
+    {   
+        src = registerMap[reg][w];
+        dst = registerMap[rm][w];
+    }
+    else
+    {
+        src = registerMap[rm][w];
+        dst = registerMap[reg][w];
+    }
+
+    bool isDirectlyAddressable = mod == 0b00 && rm == 0b110;
+    int16_t displacementData = getDisplacement(mod, buffer, isDirectlyAddressable, bytesProcessed, idx+2);
+
+    if (d == 0)
+    {
+        if (isDirectlyAddressable)
+        {
+            std::cout << "mov " << "[" << displacementData << "] " << src << '\n';
+        }
+        else if (displacementData != 0)
+        {
+            std::cout << "mov " << "[" << displacementData << "] " << src << '\n';
+        }
+    }
+
+    return bytesProcessed;
 }
 
+// constexpr as this should not alter
+constexpr opCodeDecoderFunction opCodeFuncLookup[]
+{
+    &decodeRegToReg,
+    &decodeImmToReg,
+    &decodeMemToReg,
+};
 
 // Main decoding function
 size_t decodeOP(const OPCODE op, const vector<u8> &buffer, size_t idx)
@@ -152,13 +234,14 @@ int main(int argc, char**argv)
     inFile.close();
     
     // Instruction decoding
+    std::cout << "bits 16 \n\n";
     size_t idx = 0;
     while (idx < fileSize)
     {
         u8 firstByte = buffer[idx];
-        u8 op4 = firstByte & 0b11110000;
+        u8 op4 = (firstByte & 0b11110000) >> 4;
 
-        if (op4 == 0b10110000) // imm to register
+        if (op4 == 0b1011) // imm to register
         {
             size_t bytesProcessed = decodeOP(OPCODE::MOV_IMM_REG, buffer, idx);
             idx += bytesProcessed;
@@ -182,6 +265,7 @@ int main(int argc, char**argv)
 
             idx += bytesProcessed;
         }
+
     }
 
     return 0;

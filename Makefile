@@ -5,10 +5,10 @@ EXE = sm8086
 
 all: $(EXE)
 
-$(EXE): dissambler.o 
+$(EXE): disassembler.o 
 	$(CXX) $^ -o $@
 
-dissambler.o: src/dissambler.cpp
+disassembler.o: src/disassembler.cpp
 	$(CXX) $(CXXFLAGS) $< -o $@
 
 # utils.o: src/utils.cpp
