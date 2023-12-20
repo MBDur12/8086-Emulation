@@ -18,8 +18,6 @@ enum OPCODE
     MOV_MEM_REG,
 };
 
-
-
 std::unordered_map<u8, vector<std::string>> registerMap = {
         {0b000, {"al", "ax"}},
         {0b001, {"cl", "cx"}},
@@ -72,17 +70,17 @@ size_t decodeImmToReg(const vector<u8> &buffer, size_t idx)
 {
     size_t bytesProcessed{1};
     u8 firstByte = buffer[idx];
-    u8 w = firstByte & 0b00001000;
+    u8 w = (firstByte & 0b00001000) >> 3;
     u8 reg = firstByte & 0b00000111;
     
-    int16_t data = buffer[idx+1];
+    int16_t data = (buffer[idx+1]);
     bytesProcessed++;
 
     //...
     if (w == 1)
     {
         bytesProcessed++;
-        data = (buffer[idx+2] << 8) | data;
+        data = (buffer[idx+2] << 8) | data; // 2nd byte is most significant
     }
 
     assert(registerMap.find(reg) != registerMap.end());
@@ -174,36 +172,6 @@ size_t decodeOP(const OPCODE op, const vector<u8> &buffer, size_t idx)
     size_t bytesProcessed = fnc(buffer, idx);
     return bytesProcessed;
 }
-// void decodeRegToReg(u8 byte1, u8 byte2)
-// {
-//     u8 w = byte1 & 0b00000001;
-//     u8 d = byte1 & 0b00000010;
-
-//     u8 mod = byte2 & 0b11000000;
-//     u8 reg = (byte2 & 0b00111000) >> 3;
-//     u8 rm = byte2 & 0b00000111;
-
-//     std::string src{};
-//     std::string dst{};
-
-//     assert(registerMap.find(reg) != registerMap.end());
-//     assert(registerMap.find(rm) != registerMap.end());
-
-//     if (d == 0) // REG is not destination
-//     {   
-//         src = registerMap[reg][w];
-//         dst = registerMap[rm][w];
-//     }
-//     else
-//     {
-//         src = registerMap[rm][w];
-//         dst = registerMap[reg][w];
-//     }
-
-//     std::cout << "mov " << dst << ", " << src << '\n';
-// }
-
-
 
 int main(int argc, char**argv)
 {
@@ -245,16 +213,17 @@ int main(int argc, char**argv)
         {
             size_t bytesProcessed = decodeOP(OPCODE::MOV_IMM_REG, buffer, idx);
             idx += bytesProcessed;
+            continue;
         }
 
-        u8 op6 = firstByte & 0b11111100;
-        if (op6 == 0b10001000) // reg/mem to/from reg
+        u8 op6 = (firstByte & 0b11111100) >> 2;
+        if (op6 == 0b100010) // reg/mem to/from reg
         {
             u8 secondByte = buffer[idx + 1];
-            u8 mod = secondByte & 0b11000000;
-            size_t bytesProcessed{};
+            u8 mod = (secondByte & 0b11000000) >> 6;
+            size_t bytesProcessed{0};
 
-            if (mod == 0b11000000) // reg-to-reg, no displacement
+            if (mod == 0b11) // reg-to-reg, no displacement
             {
                 bytesProcessed = decodeOP(OPCODE::MOV_REG_REG, buffer, idx);
             }
