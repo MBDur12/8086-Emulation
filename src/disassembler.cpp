@@ -29,6 +29,40 @@ std::unordered_map<u8, vector<std::string>> registerMap = {
         {0b111, {"bh", "di"}}
 };
 
+// For reg-mem
+std::string getRM(u8 val)
+{
+    std::string result{};
+    switch (val)
+    {
+        case 0b000:
+            result = "bx + si";
+            break;
+        case 0b001:
+            result = "bx + di";
+            break;
+        case 0b010:
+            result = "bp + si";
+            break;
+        case 0b011:
+            result = "bp + di";
+            break;
+        case 0b100:
+            result = "si";
+            break;
+        case 0b101:
+            result = "di";
+            break;
+        case 0b110:
+            result = "bp"; // Gets replaced when MOD is 00
+            break;
+        case 0b111:
+            result = "bx";
+            break;
+    }
+    return result;
+}
+
 void printBinary(std::string str, u8 val)
 {
     std::cout << str <<  " 0b" << std::bitset<8>(val) << '\n';
@@ -131,26 +165,53 @@ size_t decodeMemToReg(const vector<u8> &buffer, size_t idx)
     if (d == 0) // REG is not destination
     {   
         src = registerMap[reg][w];
-        dst = registerMap[rm][w];
+        dst = getRM(rm);
     }
     else
     {
-        src = registerMap[rm][w];
+        src = getRM(rm);
         dst = registerMap[reg][w];
     }
 
     bool isDirectlyAddressable = mod == 0b00 && rm == 0b110;
-    int16_t displacementData = getDisplacement(mod, buffer, isDirectlyAddressable, bytesProcessed, idx+2);
+    int16_t displacement = getDisplacement(mod, buffer, isDirectlyAddressable, bytesProcessed, idx+2);
 
     if (d == 0)
     {
         if (isDirectlyAddressable)
         {
-            std::cout << "mov " << "[" << displacementData << "] " << src << '\n';
+            std::cout << "mov " << "[" << displacement << "], " << src << '\n';
         }
-        else if (displacementData != 0)
+        else if (displacement > 0)
         {
-            std::cout << "mov " << "[" << displacementData << "] " << src << '\n';
+            std::cout << "mov " << "[" << dst << " + " << displacement << "], " << src << '\n';
+        }
+        else if (displacement < 0)
+        {
+            std::cout << "mov " << "[" << dst << " - " << displacement << "], " << src << '\n';
+        }
+        else
+        {
+            std::cout << "mov " << "[" << dst << "], " << src << '\n';
+        }
+    }
+    else
+    {
+        if (isDirectlyAddressable)
+        {
+            std::cout << "mov " << "[" << displacement << "], " << dst << '\n';
+        }
+        else if (displacement > 0)
+        {
+            std::cout << "mov " << dst << ", " << "[" << src << " + " << displacement << "]" << '\n';
+        }
+        else if (displacement < 0)
+        {
+            std::cout << "mov " << dst << ", " << "[" << src << " - " << displacement << "]" << '\n';
+        }
+        else
+        {
+            std::cout << "mov " << dst << ", " << "[" << src << "]" << '\n';
         }
     }
 

@@ -9,7 +9,7 @@ $(EXE): disassembler.o
 	$(CXX) $^ -o $@
 
 disassembler.o: src/disassembler.cpp
-	$(CXX) $(CXXFLAGS) $< -o $@
+	$(CXX) $(CXXFLAGS) $< -o $@ -g
 
 # utils.o: src/utils.cpp
 # 	$(CXX) $(CXXFLAGS) $< -o $@
