@@ -7,14 +7,57 @@ string FetchRegister(register_entry Reg)
 
 void PrintInstruction(instruction Inst)
 {
-    switch (Inst.Op)
+    instruction_operand Op0 = Inst.Operands[0];
+    instruction_operand Op1 = Inst.Operands[1];
+
+    if (Inst.Op == op_type::Op_mov)
     {
-        case op_type::Op_mov:
-            // for reg-to-reg
-            string src = FetchRegister(Inst.Operands[0].Register);
-            string dest = FetchRegister(Inst.Operands[1].Register);
+        if (Op0.Type == operand_type::Operand_Reg && Op1.Type == operand_type::Operand_Reg)
+        {
+            string src = FetchRegister(Op0.Register);
+            string dest = FetchRegister(Op1.Register);
             fprintf(stdout, "mov %s, %s\n", dest.c_str(), src.c_str());
-            break;
+        }
+        // Source address calculation
+        else if (Op0.Type == operand_type::Operand_Reg && Op1.Type == operand_type::Operand_Mem)
+        {
+            string src = FetchRegister(Op0.Register);
+            string dest = FetchRM(Op1.Address.Register.Index);
+            s16 Displacement = Op1.Address.Displacement;
+            if (Displacement > 0)
+            {
+                fprintf(stdout, "mov %s, [%s + %d]\n", dest.c_str(), src.c_str(), Displacement);
+            }
+            else if (Displacement < 0)
+            {
+                fprintf(stdout, "mov %s, [%s - %d]\n", dest.c_str(), src.c_str(), Displacement);
+            }
+            else
+            {
+                fprintf(stdout, "mov %s, [%s]\n", dest.c_str(), src.c_str());
+            }
+        }
+        // Destination address calculation
+        else if (Op0.Type == operand_type::Operand_Mem && Op1.Type == operand_type::Operand_Reg)
+        {
+            string src = FetchRM(Op0.Address.Register.Index);
+            string dest = FetchRegister(Op1.Register);
+
+            s16 Displacement = Op0.Address.Displacement;
+            if (Displacement > 0)
+            {
+                fprintf(stdout, "mov [%s + %d], %s\n", dest.c_str(), Displacement, src.c_str());
+            }
+            else if (Displacement < 0)
+            {
+                fprintf(stdout, "mov [%s - %d], %s\n", dest.c_str(), Displacement, src.c_str());
+            }
+            else
+            {
+                fprintf(stdout, "mov [%s], %s\n", dest.c_str(), src.c_str());
+            }
+        }
+
     }
 }
 
@@ -101,9 +144,17 @@ vector<instruction> BuildInstructions(u8 *Source, size_t FileSize)
                     NewInstruction.Operands[0].Type = operand_type::Operand_Reg;
                     NewInstruction.Operands[0].Register.Index = Reg;
                     NewInstruction.Operands[0].Register.Offset = W;
+
+                    NewInstruction.Operands[1].Type = operand_type::Operand_Mem;
+                    NewInstruction.Operands[1].Address.Displacement = Displacement;
+                    NewInstruction.Operands[1].Address.Register = {Rm, W};
                 }
                 else
                 {
+                    NewInstruction.Operands[0].Type = operand_type::Operand_Mem;
+                    NewInstruction.Operands[0].Address.Displacement = Displacement;
+                    NewInstruction.Operands[1].Address.Register = {Rm, W};
+
                     NewInstruction.Operands[1].Type = operand_type::Operand_Reg;
                     NewInstruction.Operands[1].Register.Index = Reg;
                     NewInstruction.Operands[1].Register.Offset = W;
@@ -118,4 +169,37 @@ vector<instruction> BuildInstructions(u8 *Source, size_t FileSize)
 
     }
     return Instructions;
+}
+
+string FetchRM(u8 Val)
+{
+    std::string result{};
+    switch (Val)
+    {
+        case 0b000:
+            result = "bx + si";
+            break;
+        case 0b001:
+            result = "bx + di";
+            break;
+        case 0b010:
+            result = "bp + si";
+            break;
+        case 0b011:
+            result = "bp + di";
+            break;
+        case 0b100:
+            result = "si";
+            break;
+        case 0b101:
+            result = "di";
+            break;
+        case 0b110:
+            result = "bp"; // Gets replaced when MOD is 00
+            break;
+        case 0b111:
+            result = "bx";
+            break;
+    }
+    return result;
 }

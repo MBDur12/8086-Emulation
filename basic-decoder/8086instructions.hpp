@@ -71,6 +71,7 @@ struct register_entry
 struct effective_address
 {
     s16 Displacement;
+    register_entry Register;
 };
 
 struct instruction_operand
@@ -93,5 +94,6 @@ struct instruction
 string FetchRegister(register_entry Reg);
 void PrintInstruction(instruction Inst);
 vector<instruction> BuildInstructions(u8 *Source, size_t FileSize);
+string FetchRM(u8 Val);
 
 #endif
