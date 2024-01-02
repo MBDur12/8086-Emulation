@@ -46,6 +46,7 @@ enum op_type
     Op_sub,
     Op_cmp,
     Op_jmp,
+    Op_none,
 };
 
 enum operand_type

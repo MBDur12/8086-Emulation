@@ -12,7 +12,14 @@ void PrintInstruction(instruction Inst)
 
     if (Inst.Op == op_type::Op_mov)
     {
-        if (Op0.Type == operand_type::Operand_Reg && Op1.Type == operand_type::Operand_Reg)
+        // Imm-to-reg
+        if (Op0.Type == operand_type::Operand_Reg && Op1.Type == operand_type::Operand_Imm)
+        {
+            string dest = FetchRegister(Op0.Register);
+            fprintf(stdout, "mov %s, %d\n", dest.c_str(), Op1.Immediate.Value);
+        }
+        // Reg-to-reg
+        else if (Op0.Type == operand_type::Operand_Reg && Op1.Type == operand_type::Operand_Reg)
         {
             string src = FetchRegister(Op0.Register);
             string dest = FetchRegister(Op1.Register);
@@ -21,8 +28,8 @@ void PrintInstruction(instruction Inst)
         // Source address calculation
         else if (Op0.Type == operand_type::Operand_Reg && Op1.Type == operand_type::Operand_Mem)
         {
-            string src = FetchRegister(Op0.Register);
-            string dest = FetchRM(Op1.Address.Register.Index);
+            string src = FetchRM(Op1.Address.Register.Index);
+            string dest = FetchRegister(Op0.Register);
             s16 Displacement = Op1.Address.Displacement;
             if (Displacement > 0)
             {
@@ -40,8 +47,8 @@ void PrintInstruction(instruction Inst)
         // Destination address calculation
         else if (Op0.Type == operand_type::Operand_Mem && Op1.Type == operand_type::Operand_Reg)
         {
-            string src = FetchRM(Op0.Address.Register.Index);
-            string dest = FetchRegister(Op1.Register);
+            string src = FetchRegister(Op1.Register);
+            string dest = FetchRM(Op0.Address.Register.Index);
 
             s16 Displacement = Op0.Address.Displacement;
             if (Displacement > 0)
@@ -57,7 +64,6 @@ void PrintInstruction(instruction Inst)
                 fprintf(stdout, "mov [%s], %s\n", dest.c_str(), src.c_str());
             }
         }
-
     }
 }
 
@@ -71,9 +77,10 @@ vector<instruction> BuildInstructions(u8 *Source, size_t FileSize)
         instruction NewInstruction;
 
         u8 Byte1 = Source[CurrentIdx];
-        u8 Op = (Byte1 & 0b11111100) >> 2;
+        u8 Op4 = (Byte1 & 0b11110000) >> 4;
+        u8 Op6 = (Byte1 & 0b11111100) >> 2;
 
-        if (Op == 0b101100) // imm-to-reg
+        if (Op4 == 0b1011) // imm-to-reg
         {
             u8 W = (Byte1 & 0b00001000) >> 3;
             s16 Data = Source[++CurrentIdx];
@@ -92,7 +99,7 @@ vector<instruction> BuildInstructions(u8 *Source, size_t FileSize)
             NewInstruction.Operands[1].Type = operand_type::Operand_Imm;
             NewInstruction.Operands[1].Immediate = {Data};
         }
-        else if (Op == 0b100010) // reg/mem to/from reg
+        else if (Op6 == 0b100010) // reg/mem to/from reg
         {
             NewInstruction.Op = op_type::Op_mov;
             u8 Byte2 = Source[++CurrentIdx];
@@ -139,29 +146,32 @@ vector<instruction> BuildInstructions(u8 *Source, size_t FileSize)
                 }   
 
 
-                if (D == 0) // REG is src
+                if (D == 0)
                 {
-                    NewInstruction.Operands[0].Type = operand_type::Operand_Reg;
-                    NewInstruction.Operands[0].Register.Index = Reg;
-                    NewInstruction.Operands[0].Register.Offset = W;
-
-                    NewInstruction.Operands[1].Type = operand_type::Operand_Mem;
-                    NewInstruction.Operands[1].Address.Displacement = Displacement;
-                    NewInstruction.Operands[1].Address.Register = {Rm, W};
-                }
-                else
-                {
-                    NewInstruction.Operands[0].Type = operand_type::Operand_Mem;
-                    NewInstruction.Operands[0].Address.Displacement = Displacement;
-                    NewInstruction.Operands[1].Address.Register = {Rm, W};
-
                     NewInstruction.Operands[1].Type = operand_type::Operand_Reg;
                     NewInstruction.Operands[1].Register.Index = Reg;
                     NewInstruction.Operands[1].Register.Offset = W;
-                }
-                
-            }
 
+                    NewInstruction.Operands[0].Type = operand_type::Operand_Mem;
+                    NewInstruction.Operands[0].Address.Displacement = Displacement;
+                    NewInstruction.Operands[0].Address.Register = {Rm, W};
+                }
+                else
+                {
+                    NewInstruction.Operands[1].Type = operand_type::Operand_Mem;
+                    NewInstruction.Operands[1].Address.Displacement = Displacement;
+                    NewInstruction.Operands[1].Address.Register = {Rm, W};
+
+                    NewInstruction.Operands[0].Type = operand_type::Operand_Reg;
+                    NewInstruction.Operands[0].Register.Index = Reg;
+                    NewInstruction.Operands[0].Register.Offset = W;
+                }
+            }
+        }
+        else
+        {
+            fprintf(stdout, "Failed to Find OpCode at index %lu\n", CurrentIdx);
+            break;
         }
 
         Instructions.push_back(NewInstruction);
